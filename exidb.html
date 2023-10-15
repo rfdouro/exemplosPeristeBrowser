@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta charset='utf-8'>
+  <meta http-equiv='X-UA-Compatible' content='IE=edge'>
+  <title>Indexed request</title>
+  <meta name='viewport' content='width=device-width, initial-scale=1'>
+  <script src='https://cdnjs.cloudflare.com/ajax/libs/vue/3.3.4/vue.global.prod.min.js'
+    integrity='sha512-39BSQXI5q1XlvVhLfFRidKG8KM6Tr6VS/XSnNo6N/A0ZXexHCeoUI/s+ulujQy3UREjoLNrMnFat8VI0mMugWA=='
+    crossorigin='anonymous'></script>
+</head>
+
+<body>
+  <div id="app">
+    total de pessoas = {{totalPessoas}}
+    <fieldset>
+      <legend>Pessoa</legend>
+      <p>
+        <label>Nome:</label>
+        <input type="text" v-model="pessoa.nome">
+      </p>
+      <p>
+        <label>CPF:</label>
+        <input type="text" v-model="pessoa.cpf">
+      </p>
+      <p>
+        <label>E-mail:</label>
+        <input type="email" v-model="pessoa.email">
+      </p>
+      <p>
+        <button class="btnsalvar" @click="addPessoa">
+          Salvar
+        </button>&nbsp;
+        <button class="btncancelar" @click="limpaPessoa">Cancelar</button>&nbsp;
+        <button class="btnexcluir" @click="delPessoa">Excluir</button>
+      </p>
+    </fieldset>
+    <hr />
+    <table>
+      <thead>
+        <tr>
+          <th>Id</th>
+          <th>Nome</th>
+          <th>CPF</th>
+          <th>E-mail</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr v-for="pessoa in pessoas" style="cursor: pointer;" @click="selecionaPessoa(pessoa)">
+          <td>{{pessoa.id}}</td>
+          <td>{{pessoa.nome}}</td>
+          <td>{{pessoa.cpf}}</td>
+          <td>{{pessoa.email}}</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <script>
+
+    class database {
+      constructor(n, v) {
+        this.nomedb = n;
+        this.versaodb = v;
+        let request = window.indexedDB.open(this.nomedb, this.versaodb);
+        request.onerror = (e) => {
+          console.error(e);
+        }
+        request.onupgradeneeded = (e) => {
+          let db = e.target.result;
+          let tbPessoas = db.createObjectStore('pessoas', { keyPath: 'id', autoIncrement: true });
+          tbPessoas.createIndex('genero', 'genero', { unique: false });
+          tbPessoas.createIndex('email', 'email', { unique: true });
+          tbPessoas.createIndex('cpf', 'cpf', { unique: true });
+        };
+      }
+
+      addObject(tabela, dados, cbSucesso, cbErro) {
+        let req = window.indexedDB.open(this.nomedb, this.versaodb);
+        req.onsuccess = (e) => {
+          let db = req.result;
+          let tx = db.transaction(tabela, "readwrite");
+          let store = tx.objectStore(tabela);
+
+          let storePut = store.put(dados);
+
+          storePut.onsuccess = (e) => {
+            cbSucesso(e);
+          }
+
+          storePut.onerror = (e) => {
+            cbErro(e);
+          }
+
+          tx.oncomplete = () => {
+            db.close();
+          }
+        }
+      }
+
+      update(tabela, key, data) {
+        let req = window.indexedDB.open(this.nomedb, this.versaodb);
+        req.onsuccess = (e) => {
+          let db = req.result;
+          let tx = db.transaction(tabela, "readwrite");
+          let store = tx.objectStore(tabela);
+
+          if (key) {
+            store.get(key).onsuccess = (e) => {
+              let obj = event.target.result;
+
+              //Atualizando o registro no banco
+              let reqUpdate = store.put(data);
+
+              //quando ocorrer erro ao atualizar o registro
+              reqUpdate.onerror = function (event) {
+                console.log('Ocorreu um erro ao salvar o registro.');
+              };
+
+              //quando o registro for atualizado com sucesso
+              reqUpdate.onsuccess = function (event) {
+                console.log('Registro atualizado com sucesso.');
+              };
+
+            };
+          }
+
+          tx.oncomplete = () => {
+            db.close();
+          }
+        }
+      }
+
+      excluiObj(tabela, chave, callback) {
+        let req = window.indexedDB.open(this.nomedb, this.versaodb);
+        req.onsuccess = (e) => {
+          let db = req.result;
+          let tx = db.transaction(tabela, "readwrite");
+          let store = tx.objectStore(tabela);
+
+          if (chave) {
+            store.delete(chave).onsuccess = (e) => {
+              console.log(`registro excluído`);
+              callback(e);
+            };
+          }
+
+          tx.oncomplete = () => {
+            db.close();
+          }
+        }
+      }
+
+      get(tabela, callback, key) {
+        let req = window.indexedDB.open(this.nomedb, this.versaodb);
+        req.onsuccess = (e) => {
+          let db = req.result;
+          let tx = db.transaction(tabela, "readonly");
+          let store = tx.objectStore(tabela);
+
+          if (key) {
+            /*store.getAll(key).onsuccess = (e) => {
+              callback(e.target.result);
+            };*/
+            store.get(key).onsuccess = (e) => {
+              callback(e.target.result);
+            };
+          } else {
+            store.getAll().onsuccess = (e) => {
+              callback(e.target.result);
+            };
+          }
+
+          tx.oncomplete = () => {
+            db.close();
+          }
+        }
+      }
+
+      getFilter(tabela, callback, filter) {
+        let req = window.indexedDB.open(this.nomedb, this.versaodb);
+        req.onsuccess = (e) => {
+          let db = req.result;
+          let tx = db.transaction(tabela, "readonly");
+          let store = tx.objectStore(tabela);
+
+          if (filter) {
+            store.getAll().onsuccess = (e) => {
+              let all = e.target.result;
+              let allf = all.filter(filter);
+              callback(allf);
+            };
+          } else {
+            store.getAll().onsuccess = (e) => {
+              callback(e.target.result);
+            };
+          }
+
+          tx.oncomplete = () => {
+            db.close();
+          }
+        }
+      }
+
+      count(tablea, callback, filter) {
+        let req = window.indexedDB.open(this.nomedb, this.versaodb);
+        req.onsuccess = (e) => {
+          let db = req.result;
+          let tx = db.transaction(tabela, "readonly");
+          let store = tx.objectStore(tabela);
+
+
+          let countRequest = objectStore.count();
+          countRequest.onsuccess = () => {
+            callback(countRequest.result);
+          };
+        }
+      }
+    }
+
+    let dbase = new database('basedados', 1);
+    /*
+        //tem que ter cpf unico e email unico
+        dbase.addObject("pessoas", { cpf: 'cpf 1', nome: `nome ${Date.now()}`, email: 'm3@2', genero: 'M' });
+    
+        dbase.getFilter("pessoas", (c) => {
+          console.log(c);
+        });
+    
+        dbase.update("pessoas", 'cpf 1', { cpf: 'cpf 1', nome: `nome ${Date.now()}`, email: 'm3@2', genero: 'M' });
+    
+        dbase.get("pessoas", (c) => {
+          console.log(c);
+        }, "cpf 1");
+    
+        dbase.get("pessoas", (c) => {
+          console.log(c);
+        });
+    
+        console.log("vai excluir  ")
+        //dbase.excluiObj("pessoas", "cpf 1", () => { console.log('okok'); });
+    
+        dbase.getFilter("pessoas", (c) => {
+          console.log(c);
+        });
+    
+        dbase.getFilter("pessoas", (c) => {
+          console.log(c);
+        }, (e) => (e.nome.indexOf('sa') > 0));
+    **/
+
+    Vue.createApp({
+      data() {
+        return {
+          totalPessoas: -1,
+          pessoa: {
+            nome: null,
+            cpf: null,
+            email: null,
+            genero: null,
+          },
+          pessoas: []
+        }
+      },
+      mounted() {
+        this.getPessoas();
+      },
+      methods: {
+        limpaPessoa() {
+          this.pessoa = {
+            nome: null,
+            cpf: null,
+            email: null,
+            genero: null,
+          };
+        },
+        getPessoas() {
+          let _this = this;
+          console.log('aqui');
+          dbase.get("pessoas", (r) => {
+            _this.pessoas = r;
+            _this.limpaPessoa();
+          });
+        },
+        addPessoa(nome) {
+          let _this = this;
+          dbase.addObject("pessoas", Vue.toRaw(_this.pessoa), () => {
+            console.log('ok')
+            _this.getPessoas();
+          }, (e) => {
+            console.log(`Erro `, e.target.error);
+            _this.limpaPessoa();
+          });
+        },
+        selecionaPessoa(p) {
+          this.pessoa = p;
+        },
+        delPessoa() {
+          let _this = this;
+          if (_this.pessoa.id) {
+            dbase.excluiObj("pessoas", _this.pessoa.id, (e) => {
+              console.log("pessoa excluída");
+              _this.getPessoas();
+            });
+          }
+        }
+      }
+    }).mount("#app");
+
+
+
+
+
+  </script>
+</body>
+
+</html>

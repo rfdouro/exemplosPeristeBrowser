@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta charset='utf-8'>
+  <meta http-equiv='X-UA-Compatible' content='IE=edge'>
+  <title>Indexed request</title>
+  <meta name='viewport' content='width=device-width, initial-scale=1'>
+  <script src='https://cdnjs.cloudflare.com/ajax/libs/vue/3.3.4/vue.global.prod.min.js'
+    integrity='sha512-39BSQXI5q1XlvVhLfFRidKG8KM6Tr6VS/XSnNo6N/A0ZXexHCeoUI/s+ulujQy3UREjoLNrMnFat8VI0mMugWA=='
+    crossorigin='anonymous'></script>
+  <script src='https://cdnjs.cloudflare.com/ajax/libs/dexie/3.2.4/dexie.min.js'
+    integrity='sha512-8WThzNuMpra6ZiqTyMfenYaUKUJVEWX6KYvlcKe1I5qCHHbtt+mW7N1mwn+xRYVJ4CaVsQ014Gh2sYCZz9ZJUw=='
+    crossorigin='anonymous'></script>
+
+  <style>
+    table tr td {
+      cursor: pointer;
+    }
+
+    fieldset button {
+      border-radius: 5px;
+    }
+
+    fieldset button.btnsalvar {
+      background-color: aquamarine;
+    }
+
+    fieldset button.btncancelar {
+      background-color: rgba(255, 162, 0, 0.468);
+    }
+
+    fieldset button.btnexcluir {
+      background-color: rgba(216, 47, 47, 0.582);
+      color: white;
+    }
+
+    fieldset input[type="file"] {
+      background-color: rgb(157, 240, 205);
+      padding: 5px;
+      border-radius: 5px;
+    }
+
+    fieldset input[type="text"] {
+      background-color: aqua;
+      border-radius: 5px;
+    }
+
+    fieldset input[type="date"] {
+      background-color: rgba(255, 251, 1, 0.838);
+      border-radius: 5px;
+    }
+  </style>
+</head>
+
+<body>
+  <div id="app">
+    <fieldset>
+      <legend>Pessoa</legend>
+      <p>
+        <label>Nome:</label>
+        <input type="text" v-model="pessoa.nome">
+      </p>
+      <p>
+        <label>CPF:</label>
+        <input type="text" v-model="pessoa.cpf">
+      </p>
+      <p>
+        <label>Nascimento:</label>
+        <input type="date" v-model="pessoa.nascimento">
+      </p>
+      <p>
+      <fieldset>
+        <legend>Foto</legend>
+        <!--
+        <vcamera :capcalback="(b)=>{pessoa.foto = b;}" :img="pessoa.foto"></vcamera>
+        -->
+        <vpicture :capcalback="(b)=>{pessoa.foto = b;}" :img="blob2ImgUrl(pessoa.foto)"></vpicture>
+      </fieldset>
+      </p>
+      <p v-if="estaDigitando">
+        <button class="btnsalvar" @click="addPessoa">
+          <span v-if="pessoa.id!=null">Atualizar</span>
+          <span v-else>Inserir</span>
+        </button>&nbsp;
+        <button class="btncancelar" @click="getPessoas">Cancelar</button>&nbsp;
+        <button class="btnexcluir" v-show="pessoa.id!=null" @click="delPessoa">Excluir</button>
+      </p>
+      <p v-else>&nbsp;</p>
+    </fieldset>
+    <hr />
+    <table>
+      <thead>
+        <tr>
+          <th>Nome</th>
+          <th>CPF</th>
+          <th>Nascimento</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr v-for="pessoa in pessoas" @click="seleciona(pessoa)">
+          <td>{{pessoa.nome}}</td>
+          <td>{{pessoa.cpf}}</td>
+          <td>{{pessoa.nascimento}}</td>
+          <td><img :src="blob2ImgUrl(pessoa.foto)" style="width: 30px" /></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <script>
+    //criação da base de dados
+    const db = new Dexie('dbexemplo');
+    //declaração das tabelas
+    db.version(1).stores({
+      pessoas: '++id, nome, nascimento',
+    });
+    //atualização da versão 2 para adição do campo cpf
+    db.version(2).stores({
+      pessoas: '++id, nome, cpf, nascimento',
+    });
+    //atualização da versão 2 para adição do campo foto
+    db.version(3).stores({
+      pessoas: '++id, nome, cpf, nascimento, foto',
+    });
+    const tbPessoas = db.pessoas;
+
+    const vpicture = {
+      template: `
+      <img style="border: 1px solid #0000ff; width: 320px; height: 320px;" ref="imgf" :src="img" />
+      <div>
+      <input ref="arquivo" type="file" accept=".jpg, .png, .jpeg" @change="carregar">
+      <br/>
+      <button @click="carregar" v-if="false">Carregar</button>
+      </div>
+      `,
+      props: {
+        capcalback: Function,
+        img: Object,
+      },
+      methods: {
+        carregar() {
+          let _this = this;
+          console.log(_this._.refs);
+          if (_this._.refs.arquivo.files.length > 0) {
+            console.log(_this._.refs.arquivo.files[0]);
+            let f = _this._.refs.arquivo.files[0];
+            let r = new FileReader();
+
+            /*
+            r.readAsDataURL(f);
+            r.onload = function () {
+              console.log(r.result);
+              _this._.refs.imgf.src = r.result;
+              if (typeof (_this.capcalback) == 'function') {
+                _this.capcalback(_this._.refs.imgf.src);
+              }
+            };
+            r.onerror = function (error) {
+              console.log('Error: ', error);
+            };
+            */
+
+
+            r.readAsArrayBuffer(f);
+            r.onload = (e) => {
+              let bits = e.target.result;
+              var blob = new Blob([new Uint8Array(bits)], { type: "image/jpeg" });
+              var urlCreator = window.URL || window.webkitURL;
+              var imageUrl = urlCreator.createObjectURL(blob);
+              if (typeof (_this.capcalback) == 'function') {
+                _this.capcalback(blob);
+              }
+              _this._.refs.imgf.src = imageUrl;
+            }
+
+
+            /*
+            r.readAsBinaryString(f);
+            r.onload = (e) => {
+              console.log('aqui ', e);
+              let bits = e.target.result;
+              let ob = {
+                ext: _this._.refs.arquivo.files[0].name.split('.')[1],
+                created: new Date(),
+                data: bits
+              };
+              _this._.refs.imgf.src = 'data:image/' + ob.ext + ';base64,' + btoa(ob.data);
+              console.log(_this._.refs.imgf.src);
+              if (typeof (_this.capcalback) == 'function') {
+                _this.capcalback(ob.data);
+              }
+            };
+            r.onerror = function (error) {
+              console.log('Error: ', error);
+            };
+            */
+
+          }
+        }
+      }
+    }
+
+    const vcamera = {
+      descricao: `o elemento canvas é auxiliar apenas para captura da foto
+      o elemento img serve para exibir a imagem
+      a imagem é gerada em Base64`,
+      template: `
+      <video ref="video" width="320" height="240" autoplay v-show="!capturado && exibindo"></video>
+      <canvas ref="canvas" width="320" height="240" v-show="false"></canvas>
+      <img style="border: 1px solid #0000ff" ref="imgf" :src="img" v-show="(img!=null && !exibindo) || capturado" />
+      <br/>
+      <button @click='ligar' v-if="!exibindo">Ligar</button>
+      <button @click='capturar' v-if="exibindo">Capturar</button>
+      <button @click='cancelar' v-if="exibindo">Cancelar</button>
+      `,
+      props: {
+        capcalback: Function,
+        img: Object,
+      },
+      data() {
+        return {
+          exibindo: false,
+          capturado: false,
+        };
+      },
+      methods: {
+        ligar() {
+          let _this = this;
+          console.log(_this._.refs);
+          navigator.mediaDevices.getUserMedia({ video: true, audio: false }).then((stream) => {
+            _this._.refs.video.srcObject = stream;
+            _this._.refs.video.play();
+            _this.exibindo = true;
+            _this.capturado = false;
+          }).catch((e) => {
+            console.log(`ocorreu um erro ${e}`);
+          });
+        },
+        capturar() {
+          let _this = this;
+          let canvas = _this._.refs.canvas;
+          let imgf = _this._.refs.imgf;
+          _this._.refs.canvas.getContext('2d').drawImage(_this._.refs.video, 0, 0, canvas.width, canvas.height);
+          _this._.refs.canvas.toBlob((blob) => {
+            if (typeof (_this.capcalback) == 'function') {
+              _this.capcalback(blob);
+              let image_data_url = _this._.refs.canvas.toDataURL('image/jpeg');
+              _this.img = image_data_url;
+              _this.capcalback(image_data_url);
+            }
+          });
+          _this.capturado = true;
+          _this.exibindo = false;
+        },
+        cancelar() {
+          let _this = this;
+          _this._.refs.video.pause();
+          _this.capturado = false;
+          _this.exibindo = false;
+        }
+      }
+    }
+
+    Vue.createApp({
+      components: {
+        vcamera, vpicture
+      },
+      data() {
+        return {
+          pessoa: {
+            nome: null,
+            nascimento: null,
+            cpf: null,
+          },
+          pessoas: []
+        }
+      },
+      mounted() {
+        this.getPessoas();
+      },
+      methods: {
+        limpaPessoa() {
+          this.pessoa = {
+            nome: null,
+            nascimento: null,
+            cpf: null,
+          };
+        },
+        foto2src(blob) {
+          //return 'data:image/jpeg;base64,' + btoa(blob);
+          let reader = new FileReader();
+          reader.readAsDataURL(blob);
+          reader.onloadend = function () {
+            var base64data = reader.result;
+            console.log(base64data);
+          }
+        },
+        addPessoa() {
+          let _this = this;
+          console.log(_this.pessoa);
+          if (_this.pessoa.id != null) {
+            //atualiza
+            tbPessoas.update(_this.pessoa.id, Vue.toRaw(_this.pessoa)).then(function (r) {
+              console.log('atualizou', r);
+              _this.getPessoas();
+            });
+          } else {
+            tbPessoas.add(Vue.toRaw(_this.pessoa)).then(function (r) {
+              console.log('inseriu', r);
+              _this.getPessoas();
+            });
+          }
+        },
+        seleciona(pessoa) {
+          this.pessoa = pessoa;
+        },
+        getPessoas() {
+          let _this = this;
+          tbPessoas.orderBy('nome').toArray((pessoas) => {
+            _this.pessoas = pessoas;
+            _this.limpaPessoa();
+          });
+        },
+        delPessoa() {
+          let _this = this;
+          if (this.pessoa.id != null) {
+            if (confirm("Confirma a exclusão?")) {
+              let _id = this.pessoa.id;
+              tbPessoas.get(_id).then((p) => {
+                if (p != null) {
+                  tbPessoas.delete(_id);
+                  _this.getPessoas();
+                  return;
+                }
+              });
+            }
+          }
+        },
+        blob2ImgUrl(blob) {
+          if (!blob)
+            return null;
+          var urlCreator = window.URL || window.webkitURL;
+          var imageUrl = urlCreator.createObjectURL(blob);
+          return imageUrl;
+        }
+      },
+      computed: {
+        estaDigitando() {
+          let res = false;
+          Object.values(this.pessoa).forEach(p => {
+            if (p != null && p != '')
+              res = res || true;
+          });
+          return res;
+        }
+      }
+    }).mount("#app");
+  </script>
+</body>
+
+</html>

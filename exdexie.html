@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta charset='utf-8'>
+  <meta http-equiv='X-UA-Compatible' content='IE=edge'>
+  <title>Indexed request</title>
+  <meta name='viewport' content='width=device-width, initial-scale=1'>
+  <script src='https://cdnjs.cloudflare.com/ajax/libs/vue/3.3.4/vue.global.prod.min.js'
+    integrity='sha512-39BSQXI5q1XlvVhLfFRidKG8KM6Tr6VS/XSnNo6N/A0ZXexHCeoUI/s+ulujQy3UREjoLNrMnFat8VI0mMugWA=='
+    crossorigin='anonymous'></script>
+  <script src='https://cdnjs.cloudflare.com/ajax/libs/dexie/3.2.4/dexie.min.js'
+    integrity='sha512-8WThzNuMpra6ZiqTyMfenYaUKUJVEWX6KYvlcKe1I5qCHHbtt+mW7N1mwn+xRYVJ4CaVsQ014Gh2sYCZz9ZJUw=='
+    crossorigin='anonymous'></script>
+
+  <style>
+    table tr td {
+      cursor: pointer;
+    }
+
+    fieldset button {
+      border-radius: 5px;
+    }
+
+    fieldset button.btnsalvar {
+      background-color: aquamarine;
+    }
+
+    fieldset button.btncancelar {
+      background-color: rgba(255, 162, 0, 0.468);
+    }
+
+    fieldset button.btnexcluir {
+      background-color: rgba(216, 47, 47, 0.582);
+      color: white;
+    }
+
+    fieldset input[type="text"] {
+      background-color: aqua;
+      border-radius: 5px;
+    }
+
+    fieldset input[type="date"] {
+      background-color: rgba(255, 251, 1, 0.838);
+      border-radius: 5px;
+    }
+  </style>
+</head>
+
+<body>
+  <div id="app">
+    <fieldset>
+      <legend>Pessoa</legend>
+      <p>
+        <label>Nome:</label>
+        <input type="text" v-model="pessoa.nome">
+      </p>
+      <p>
+        <label>CPF:</label>
+        <input type="text" v-model="pessoa.cpf">
+      </p>
+      <p>
+        <label>Nascimento:</label>
+        <input type="date" v-model="pessoa.nascimento">
+      </p>
+      <p v-if="estaDigitando">
+        <button class="btnsalvar" @click="addPessoa">
+          <span v-if="pessoa.id!=null">Atualizar</span>
+          <span v-else>Inserir</span>
+        </button>&nbsp;
+        <button class="btncancelar" @click="limpaPessoa">Cancelar</button>&nbsp;
+        <button class="btnexcluir" v-show="pessoa.id!=null" @click="delPessoa">Excluir</button>
+      </p>
+      <p v-else>&nbsp;</p>
+    </fieldset>
+    <hr />
+    <table>
+      <thead>
+        <tr>
+          <th>Nome</th>
+          <th>CPF</th>
+          <th>Nascimento</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr v-for="pessoa in pessoas" @click="seleciona(pessoa)">
+          <td>{{pessoa.nome}}</td>
+          <td>{{pessoa.cpf}}</td>
+          <td>{{pessoa.nascimento}}</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <script>
+    //criação da base de dados
+    const db = new Dexie('dbexemplo');
+    //declaração das tabelas
+    db.version(1).stores({
+      pessoas: '++id, nome, nascimento',
+    });
+    //atualização da versão 2 para adição do campo cpf
+    db.version(2).stores({
+      pessoas: '++id, nome, cpf, nascimento',
+    });
+    const tbPessoas = db.pessoas;
+
+
+    Vue.createApp({
+      data() {
+        return {
+          pessoa: {
+            nome: null,
+            nascimento: null,
+            cpf: null,
+          },
+          pessoas: []
+        }
+      },
+      mounted() {
+        this.getPessoas();
+      },
+      methods: {
+        limpaPessoa() {
+          this.pessoa = {
+            nome: null,
+            nascimento: null,
+            cpf: null,
+          };
+        },
+        addPessoa() {
+          let _this = this;
+          if (_this.pessoa.id != null) {
+            //atualiza
+            tbPessoas.update(_this.pessoa.id, Vue.toRaw(_this.pessoa)).then(function (r) {
+              console.log('atualizou', r);
+              _this.getPessoas();
+            });
+          } else {
+            tbPessoas.add(Vue.toRaw(_this.pessoa)).then(function (r) {
+              console.log('inseriu', r);
+              _this.getPessoas();
+            });
+          }
+        },
+        seleciona(pessoa) {
+          this.pessoa = pessoa;
+        },
+        getPessoas() {
+          let _this = this;
+          tbPessoas.orderBy('nome').toArray((pessoas) => {
+            _this.pessoas = pessoas;
+            _this.limpaPessoa();
+          });
+        },
+        delPessoa() {
+          let _this = this;
+          if (this.pessoa.id != null) {
+            if (confirm("Confirma a exclusão?")) {
+              let _id = this.pessoa.id;
+              tbPessoas.get(_id).then((p) => {
+                if (p != null) {
+                  tbPessoas.delete(_id);
+                  _this.getPessoas();
+                  return;
+                }
+              });
+            }
+          }
+        },
+      },
+      computed: {
+        estaDigitando() {
+          let res = false;
+          Object.values(this.pessoa).forEach(p => {
+            if (p != null && p != '')
+              res = res || true;
+          });
+          return res;
+        }
+      }
+    }).mount("#app");
+  </script>
+</body>
+
+</html>

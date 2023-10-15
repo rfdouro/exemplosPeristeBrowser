@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta charset='utf-8'>
+  <meta http-equiv='X-UA-Compatible' content='IE=edge'>
+  <title>Web SQL</title>
+  <meta name='viewport' content='width=device-width, initial-scale=1'>
+  <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+</head>
+
+<body>
+  <div id="app">
+    total de tarefas = {{totalTarefas}}
+
+    <fieldset>
+      <legend>Tarefa</legend>
+      <label>Tarefa:</label>
+      <input type="text" v-model="descricao" @keypress.enter="addTarefa" />
+    </fieldset>
+
+    <table style="width: 100%">
+      <thead>
+        <tr>
+          <th style="width: 15%">Id</th>
+          <th style="width: 65%">Descrição</th>
+          <th>Ações</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr v-for="item in tarefas">
+          <td>{{item.id}}</td>
+          <td>{{item.descricao}}</td>
+          <td><button @click="delTarefa(item.id)">X</button></td>
+        </tr>
+      </tbody>
+    </table>
+
+  </div>
+  <script>
+
+    class BaseWSQL {
+      constructor() {
+        let _this = this;
+        this.db = openDatabase('basetarefas', '1.0', 'Base de tarefas', 2 * 1024 * 1024);
+        this.db.transaction(function (tx) {
+          tx.executeSql('drop table if exists tarefa');
+
+          tx.executeSql('create table if not exists tarefa (id integer primary key, descricao varchar)', [], () => {
+            console.log(`tabelas criadas`)
+          });
+        });
+      }
+
+
+      getTotalTarefas(callback) {
+        this.db.transaction(function (tx) {
+          tx.executeSql('select count(*) as c from tarefa', [], function (t, r) {
+            callback(r.rows[0].c);
+          });
+        });
+      }
+
+      getTarefas(callback) {
+        this.db.transaction(function (tx) {
+          tx.executeSql('select * from tarefa order by descricao', [], function (t, r) {
+            callback(r);
+          });
+        });
+      }
+
+      addTarefa(descricao, callback) {
+        let _this = this;
+        this.db.transaction(function (tx) {
+          tx.executeSql(`insert into tarefa (descricao) values ('${descricao}')`, [], () => {
+            callback();
+          }, (e) => {
+            console.log('erro ', e)
+          });
+        });
+      }
+
+      delTarefa(id, callback) {
+        let _this = this;
+        if (!id) {
+          this.db.transaction(function (tx) {
+            tx.executeSql('select id from tarefa order by id asc limit 1', [], function (t, r) {
+              tx.executeSql('delete from tarefa where id = ?', [r.rows[0].id], function (t, r) {
+                callback(r);
+              });
+            });
+          });
+        } else {
+          this.db.transaction(function (tx) {
+            tx.executeSql('delete from tarefa where id = ?', [id], function (t, r) {
+              callback(r);
+            });
+          });
+        }
+      }
+    }
+
+    const baseDados = new BaseWSQL();
+
+    Vue.createApp({
+      data() {
+        return {
+          totalTarefas: -1,
+          descricao: null,
+          tarefas: []
+        }
+      },
+      mounted() {
+        baseDados.getTotalTarefas((total) => {
+          this.totalTarefas = total;
+          this.getTarefas();
+        });
+      },
+      methods: {
+        getTarefas() {
+          baseDados.getTarefas((r) => {
+            this.tarefas = r.rows;
+          });
+        },
+        addTarefa() {
+          if (this.descricao != null)
+            baseDados.addTarefa(this.descricao, () => {
+              baseDados.getTotalTarefas((total) => {
+                this.totalTarefas = total;
+                this.descricao = null;
+                this.getTarefas();
+              });
+            });
+        },
+        delTarefa(id) {
+          baseDados.delTarefa(id, (r) => {
+            baseDados.getTotalTarefas((total) => {
+              this.totalTarefas = total;
+              this.getTarefas();
+            });
+          })
+        }
+      }
+    }).mount("#app");
+
+  </script>
+</body>
+
+</html>
